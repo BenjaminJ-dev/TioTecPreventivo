@@ -1,10 +1,15 @@
 package com.example.tiotecpreventivo
 
+import android.Manifest
+import android.graphics.Bitmap
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Arrangement
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,31 +21,29 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.example.tiotecpreventivo.ui.theme.TioTecPreventivoTheme
-import androidx.compose.material3.Checkbox
 import androidx.compose.ui.Alignment
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import com.example.tiotecpreventivo.data.DatabaseProvider
-import com.example.tiotecpreventivo.data.AccionPreventiva
-import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.tiotecpreventivo.ui.screens.InicioTioTec
+import com.example.tiotecpreventivo.ui.theme.TioTecPreventivoTheme
+import com.example.tiotecpreventivo.ui.viewmodel.TioTecViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        NotificacionHelper.crearCanal(this)
 
         setContent {
             TioTecPreventivoTheme {
@@ -59,30 +62,31 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppTioTec(modifier: Modifier = Modifier) {
     val pantalla = remember { mutableStateOf("inicio") }
-    val respuestas = remember {
-        mutableStateListOf<Boolean?>(null, null, null, null)
-    }
-    val mostrarError = remember { mutableStateOf(false) }
+    val modelo: TioTecViewModel = viewModel()
 
-    val accionesCompletadas = remember {
-        mutableStateListOf(false, false, false, false)
+    val fotoDispositivo = remember { mutableStateOf<Bitmap?>(null) }
 
+    val lanzadorCamara = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { foto ->
+        fotoDispositivo.value = foto
     }
 
     val contexto = LocalContext.current
-    val dao = remember {
-        DatabaseProvider.obtenerBaseDeDatos(contexto)
-            .accionPreventivaDao()
+
+    val permisoNotificaciones = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { concedido ->
+        if (concedido) {
+            NotificacionHelper.mostrar(contexto)
+        }
     }
-    val alcance = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
-        val accionesGuardadas = dao.obtenerTodas()
-
-        accionesGuardadas.forEach { accion ->
-            if (accion.id in accionesCompletadas.indices) {
-                accionesCompletadas[accion.id] = accion.completada
-            }
+    val probarNotificacion = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permisoNotificaciones.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            NotificacionHelper.mostrar(contexto)
         }
     }
 
@@ -93,24 +97,30 @@ fun AppTioTec(modifier: Modifier = Modifier) {
         "¿Tienes actualizado un correo o teléfono para recuperar tus cuentas?"
     )
 
-    when (pantalla.value) {
-        "inicio" -> InicioTioTec(
-            modifier = modifier,
-            alComenzar = { pantalla.value = "evaluacion" }
-        )
-
+    AnimatedContent(
+        targetState = pantalla.value,
+        label = "Transición entre pantallas"
+    ) { pantallaActual ->
+        when (pantallaActual) {
+            "inicio" -> InicioTioTec(
+                modifier = modifier,
+                alComenzar = { pantalla.value = "evaluacion" },
+                alProbarNotificacion = probarNotificacion,
+                fotoDispositivo = fotoDispositivo.value,
+                alTomarFoto = { lanzadorCamara.launch(null) }
+            )
         "evaluacion" -> EvaluacionTioTec(
             modifier = modifier,
             preguntas = preguntas,
-            respuestas = respuestas,
-            mostrarError = mostrarError.value,
+            respuestas = modelo.respuestas,
+            mostrarError = modelo.mostrarError,
+            alCambiarRespuesta = { indice, respuesta ->
+                modelo.cambiarRespuesta(indice, respuesta)
+            },
             alVolver = { pantalla.value = "inicio" },
             alVerResultado = {
-                if (respuestas.all { it != null }) {
-                    mostrarError.value = false
+                if (modelo.validarRespuestas()) {
                     pantalla.value = "resultado"
-                } else {
-                    mostrarError.value = true
                 }
             }
         )
@@ -118,77 +128,23 @@ fun AppTioTec(modifier: Modifier = Modifier) {
         "resultado" -> ResultadoTioTec(
             modifier = modifier,
             preguntas = preguntas,
-            respuestas = respuestas,
-            accionesCompletadas = accionesCompletadas,
+            respuestas = modelo.respuestas,
+            accionesCompletadas = modelo.accionesCompletadas,
             alCambiarAccion = { indice, marcada ->
-                accionesCompletadas[indice] = marcada
-
-                alcance.launch {
-                    dao.guardar(
-                        AccionPreventiva(
-                            id = indice,
-                            completada = marcada
-                        )
-                    )
-                }
+                modelo.cambiarAccion(indice, marcada)
             },
             alVolver = { pantalla.value = "inicio" }
         )
-    }
-}
-
-@Composable
-fun InicioTioTec(
-    modifier: Modifier = Modifier,
-    alComenzar: () -> Unit
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "TíoTec",
-            style = MaterialTheme.typography.headlineLarge
-        )
-
-        Text(
-            text = "Tu guía de prevención digital",
-            style = MaterialTheme.typography.titleMedium
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = "Revisa tus hábitos de seguridad",
-                    style = MaterialTheme.typography.titleLarge
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Responde una evaluación breve y descubre qué acciones preventivas puedes realizar."
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Button(onClick = alComenzar) {
-                    Text("Comenzar evaluación")
-                }
-            }
         }
     }
 }
-
 @Composable
 fun EvaluacionTioTec(
     modifier: Modifier = Modifier,
     preguntas: List<String>,
-    respuestas: MutableList<Boolean?>,
+    respuestas: List<Boolean?>,
     mostrarError: Boolean,
+    alCambiarRespuesta: (Int, Boolean) -> Unit,
     alVolver: () -> Unit,
     alVerResultado: () -> Unit
 ) {
@@ -225,7 +181,7 @@ fun EvaluacionTioTec(
                         Row {
                             RadioButton(
                                 selected = respuestas[indice] == true,
-                                onClick = { respuestas[indice] = true }
+                                onClick = { alCambiarRespuesta(indice, true) }
                             )
                             Text(
                                 text = "Sí",
@@ -238,13 +194,21 @@ fun EvaluacionTioTec(
                         Row {
                             RadioButton(
                                 selected = respuestas[indice] == false,
-                                onClick = { respuestas[indice] = false }
+                                onClick = { alCambiarRespuesta(indice, false) }
                             )
                             Text(
                                 text = "No",
                                 modifier = Modifier.padding(top = 12.dp)
                             )
                         }
+                    }
+                    if (mostrarError && respuestas[indice] == null) {
+                        Text(
+                            text = "Selecciona Sí o No para continuar.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
                 }
             }
@@ -277,7 +241,7 @@ fun ResultadoTioTec(
     modifier: Modifier = Modifier,
     preguntas: List<String>,
     respuestas: List<Boolean?>,
-    accionesCompletadas: MutableList<Boolean>,
+    accionesCompletadas: List<Boolean>,
     alCambiarAccion: (Int, Boolean) -> Unit,
     alVolver: () -> Unit
 ) {
