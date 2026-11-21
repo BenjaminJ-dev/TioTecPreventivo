@@ -1,6 +1,7 @@
 package com.example.tiotecpreventivo
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
@@ -18,18 +19,39 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.tiotecpreventivo.ui.screens.AlertasAnciScreen
 import com.example.tiotecpreventivo.ui.screens.EvaluacionTioTec
 import com.example.tiotecpreventivo.ui.screens.InicioTioTec
 import com.example.tiotecpreventivo.ui.screens.ResultadoTioTec
 import com.example.tiotecpreventivo.ui.theme.TioTecPreventivoTheme
+import com.example.tiotecpreventivo.ui.viewmodel.AlertasAnciViewModel
 import com.example.tiotecpreventivo.ui.viewmodel.TioTecViewModel
+import androidx.compose.runtime.saveable.rememberSaveable
 
 class MainActivity : ComponentActivity() {
+    private val permisoRedLocal = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { concedido ->
+        if (concedido) {
+            ViewModelProvider(this)[TioTecViewModel::class.java].sincronizarChecklist()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         NotificacionHelper.crearCanal(this)
+
+        if (savedInstanceState == null &&
+            Build.VERSION.SDK_INT >= 37 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_LOCAL_NETWORK) !=
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            permisoRedLocal.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
+        }
 
         setContent {
             TioTecPreventivoTheme {
@@ -49,7 +71,8 @@ class MainActivity : ComponentActivity() {
 fun AppTioTec(modifier: Modifier = Modifier) {
     val pantalla = remember { mutableStateOf("inicio") }
     val modelo: TioTecViewModel = viewModel()
-
+    val nombrePerfil = rememberSaveable { mutableStateOf("") }
+    val perfilConfirmado = rememberSaveable { mutableStateOf(false) }
     val fotoDispositivo = remember { mutableStateOf<Bitmap?>(null) }
 
     val lanzadorCamara = rememberLauncherForActivityResult(
@@ -91,10 +114,28 @@ fun AppTioTec(modifier: Modifier = Modifier) {
             "inicio" -> InicioTioTec(
                 modifier = modifier,
                 alComenzar = { pantalla.value = "evaluacion" },
+                alVerAlertas = { pantalla.value = "alertas" },
                 alProbarNotificacion = probarNotificacion,
-                fotoDispositivo = fotoDispositivo.value,
+                nombrePerfil = nombrePerfil.value,
+                perfilConfirmado = perfilConfirmado.value,
+                alConfirmarNombre = { perfilConfirmado.value = true },
+                alEditarNombre = { perfilConfirmado.value = false },
+                alCambiarNombre = { nuevoNombre ->
+                    nombrePerfil.value = nuevoNombre
+                },
+                fotoPerfil = fotoDispositivo.value,
                 alTomarFoto = { lanzadorCamara.launch(null) }
             )
+
+            "alertas" -> {
+                val modeloAlertas: AlertasAnciViewModel = viewModel()
+                AlertasAnciScreen(
+                    estado = modeloAlertas.estado,
+                    alReintentar = modeloAlertas::reintentar,
+                    alVolver = { pantalla.value = "inicio" },
+                    modifier = modifier
+                )
+            }
 
             "evaluacion" -> EvaluacionTioTec(
                 modifier = modifier,
@@ -117,6 +158,9 @@ fun AppTioTec(modifier: Modifier = Modifier) {
                 preguntas = preguntas,
                 respuestas = modelo.respuestas,
                 accionesCompletadas = modelo.accionesCompletadas,
+                reiniciandoProgreso = modelo.reiniciandoProgreso,
+                errorReinicio = modelo.errorReinicio,
+                alReiniciarProgreso = modelo::reiniciarProgreso,
                 alCambiarAccion = { indice, marcada ->
                     modelo.cambiarAccion(indice, marcada)
                 },
