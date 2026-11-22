@@ -1,8 +1,22 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp") version "2.3.10"
 }
+
+val releaseKeystoreProperties = providers
+    .fileContents(rootProject.layout.projectDirectory.file("keystore.properties"))
+    .asText
+    .orNull
+    ?.let { contenido ->
+        try {
+            Properties().apply { load(contenido.reader()) }
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+    }
 
 android {
     namespace = "com.example.tiotecpreventivo"
@@ -20,14 +34,33 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val releaseSigning = releaseKeystoreProperties?.let { propiedades ->
+        fun propiedadCompleta(nombre: String): String? =
+            propiedades.getProperty(nombre)?.takeIf { it.isNotBlank() }
+
+        val ruta = propiedadCompleta("storeFile") ?: return@let null
+        val claveAlmacen = propiedadCompleta("storePassword") ?: return@let null
+        val alias = propiedadCompleta("keyAlias") ?: return@let null
+        val claveLlave = propiedadCompleta("keyPassword") ?: return@let null
+        val archivo = rootDir.resolve(ruta)
+        if (!archivo.isFile) return@let null
+
+        signingConfigs.create("release") {
+            storeFile = archivo
+            storePassword = claveAlmacen
+            keyAlias = alias
+            keyPassword = claveLlave
+        }
+    }
+
     buildTypes {
         debug {
             enableUnitTestCoverage = true
         }
         release {
+            signingConfig = releaseSigning
             optimization {
-                enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
+                enable = false
             }
         }
     }
