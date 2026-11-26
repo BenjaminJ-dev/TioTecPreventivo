@@ -2,7 +2,7 @@
 
 Aplicación Android desarrollada para promover hábitos de seguridad digital mediante una evaluación preventiva y recomendaciones prácticas.
 
-## Integrantes
+## Integrantes 
 
 - BenjaminJ-dev
 - Matías Bustos
