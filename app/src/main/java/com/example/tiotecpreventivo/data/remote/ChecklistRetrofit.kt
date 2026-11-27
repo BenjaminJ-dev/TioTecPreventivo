@@ -6,7 +6,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object ChecklistRetrofit {
-    val api: ChecklistApiService by lazy {
+    private val retrofit: Retrofit by lazy {
         val cliente = OkHttpClient.Builder()
             .callTimeout(5, TimeUnit.SECONDS)
             .build()
@@ -16,6 +16,8 @@ object ChecklistRetrofit {
             .client(cliente)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
-            .create(ChecklistApiService::class.java)
     }
+
+    val api: ChecklistApiService by lazy { retrofit.create(ChecklistApiService::class.java) }
+    val evaluacion: EvaluacionApiService by lazy { retrofit.create(EvaluacionApiService::class.java) }
 }

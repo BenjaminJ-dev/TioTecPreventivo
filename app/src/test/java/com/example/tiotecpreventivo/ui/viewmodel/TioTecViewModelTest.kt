@@ -57,33 +57,6 @@ class TioTecViewModelTest {
     }
 
     @Test
-    fun unaRespuestaPendienteImpideValidarYActivaElError() {
-        responderPrimerasTres()
-
-        assertFalse(modelo.validarRespuestas())
-        assertTrue(modelo.mostrarError)
-    }
-
-    @Test
-    fun cuatroRespuestasContestadasPermitenValidar() {
-        responderPrimerasTres()
-        modelo.cambiarRespuesta(3, false)
-
-        assertTrue(modelo.validarRespuestas())
-    }
-
-    @Test
-    fun completarLaRespuestaPendienteLimpiaElErrorSinVolverAValidar() {
-        responderPrimerasTres()
-        assertFalse(modelo.validarRespuestas())
-        assertTrue(modelo.mostrarError)
-
-        modelo.cambiarRespuesta(3, false)
-
-        assertFalse(modelo.mostrarError)
-    }
-
-    @Test
     fun cambiarCasillaGuardaSuIndiceYAmbosValores() = runBlocking {
         dispatcher.scheduler.runCurrent()
 
@@ -133,7 +106,6 @@ class TioTecViewModelTest {
     @Test
     fun reinicioExitosoEsperaTodasLasEliminacionesEIgnoraIntentosRepetidos() = runBlocking {
         dao.guardar(AccionPreventiva(1, true, false))
-        modelo.cambiarRespuesta(0, true)
         dispatcher.scheduler.runCurrent()
         val ultimaEliminacion = CompletableDeferred<Unit>()
         api.alEliminar = { id ->
@@ -156,7 +128,6 @@ class TioTecViewModelTest {
         assertEquals(listOf("GET", "DELETE 0", "DELETE 1", "DELETE 2", "DELETE 3"), api.llamadas)
         assertEquals(listOf(false, false, false, false), modelo.accionesCompletadas)
         assertTrue(dao.obtenerTodas().isEmpty())
-        assertEquals(true, modelo.respuestas[0])
         assertFalse(modelo.reiniciandoProgreso)
         assertNull(modelo.errorReinicio)
     }
@@ -182,24 +153,17 @@ class TioTecViewModelTest {
     }
 
     @Test
-    fun indicesInvalidosNoCambianRespuestasNiGuardanAcciones() = runBlocking {
+    fun indicesInvalidosNoGuardanAcciones() = runBlocking {
         dispatcher.scheduler.runCurrent()
 
         for (indice in listOf(-1, 4)) {
-            modelo.cambiarRespuesta(indice, true)
             modelo.cambiarAccion(indice, true)
         }
         dispatcher.scheduler.runCurrent()
 
-        assertEquals(listOf(null, null, null, null), modelo.respuestas)
         assertEquals(listOf(false, false, false, false), modelo.accionesCompletadas)
         assertTrue(dao.obtenerTodas().isEmpty())
         assertEquals(listOf("GET"), api.llamadas)
     }
 
-    private fun responderPrimerasTres() {
-        modelo.cambiarRespuesta(0, true)
-        modelo.cambiarRespuesta(1, false)
-        modelo.cambiarRespuesta(2, true)
-    }
 }

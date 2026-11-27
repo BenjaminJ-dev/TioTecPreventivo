@@ -34,8 +34,6 @@ class TioTecViewModel(application: Application) : AndroidViewModel(application) 
         }
     )
 
-    val respuestas = mutableStateListOf<Boolean?>(null, null, null, null)
-
     private val listaAcciones = mutableStateListOf(false, false, false, false)
     val accionesCompletadas: List<Boolean> = listaAcciones
     private val accionesEditadas = mutableSetOf<Int>()
@@ -44,9 +42,6 @@ class TioTecViewModel(application: Application) : AndroidViewModel(application) 
     var reiniciandoProgreso by mutableStateOf(false)
         private set
     var errorReinicio by mutableStateOf<String?>(null)
-        private set
-
-    var mostrarError by mutableStateOf(false)
         private set
 
     init {
@@ -68,22 +63,6 @@ class TioTecViewModel(application: Application) : AndroidViewModel(application) 
                 listaAcciones[accion.id] = accion.completada
             }
         }
-    }
-
-    fun cambiarRespuesta(indice: Int, respuesta: Boolean) {
-        if (indice !in respuestas.indices) return
-
-        respuestas[indice] = respuesta
-
-        if (respuestas.all { it != null }) {
-            mostrarError = false
-        }
-    }
-
-    fun validarRespuestas(): Boolean {
-        val estanCompletas = respuestas.all { it != null }
-        mostrarError = !estanCompletas
-        return estanCompletas
     }
 
     fun cambiarAccion(indice: Int, marcada: Boolean) {

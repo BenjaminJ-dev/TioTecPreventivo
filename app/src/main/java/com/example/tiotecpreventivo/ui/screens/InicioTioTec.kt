@@ -36,7 +36,6 @@ fun InicioTioTec(
     modifier: Modifier = Modifier,
     alComenzar: () -> Unit,
     alVerAlertas: () -> Unit,
-    alProbarNotificacion: () -> Unit,
     nombrePerfil: String,
     alCambiarNombre: (String) -> Unit,
     fotoPerfil: Bitmap?,
@@ -93,9 +92,6 @@ fun InicioTioTec(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Button(onClick = alProbarNotificacion) {
-                    Text("Probar recordatorio")
-                }
                 Text(
                     text = "Crea tu perfil de prueba",
                     style = MaterialTheme.typography.titleMedium
