@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -22,16 +23,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
+import com.example.tiotecpreventivo.data.PreguntaEvaluacion
 
 @Composable
 fun EvaluacionTioTec(
     modifier: Modifier = Modifier,
-    preguntas: List<String>,
-    respuestas: List<Boolean?>,
+    preguntas: List<PreguntaEvaluacion>,
     mostrarError: Boolean,
+    sincronizando: Boolean,
+    errorRed: String?,
+    alReintentar: () -> Unit,
     alCambiarRespuesta: (Int, Boolean) -> Unit,
     alVolver: () -> Unit,
     alVerResultado: () -> Unit
@@ -48,7 +51,17 @@ fun EvaluacionTioTec(
         )
 
         Spacer(modifier = Modifier.height(8.dp))
-        Text("Selecciona una respuesta para cada pregunta.")
+        if (sincronizando) {
+            Text(if (preguntas.isEmpty()) "Cargando preguntas…" else "Sincronizando evaluación…")
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+        if (errorRed != null) {
+            Text(errorRed, color = MaterialTheme.colorScheme.error)
+            TextButton(onClick = alReintentar, enabled = !sincronizando) {
+                Text("Reintentar")
+            }
+        }
+        if (preguntas.isNotEmpty()) Text("Selecciona una respuesta para cada pregunta.")
         Spacer(modifier = Modifier.height(16.dp))
 
         preguntas.forEachIndexed { indice, pregunta ->
@@ -59,16 +72,17 @@ fun EvaluacionTioTec(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "${indice + 1}. $pregunta",
+                        text = "${indice + 1}. ${pregunta.texto}",
                         style = MaterialTheme.typography.titleMedium
                     )
 
                     Row {
                         Row {
                             RadioButton(
-                                selected = respuestas[indice] == true,
+                                enabled = !sincronizando && errorRed == null,
+                                selected = pregunta.respuesta == true,
                                 onClick = {
-                                    alCambiarRespuesta(indice, true)
+                                    alCambiarRespuesta(pregunta.id, true)
                                 }
                             )
                             Text(
@@ -83,9 +97,10 @@ fun EvaluacionTioTec(
 
                         Row {
                             RadioButton(
-                                selected = respuestas[indice] == false,
+                                enabled = !sincronizando && errorRed == null,
+                                selected = pregunta.respuesta == false,
                                 onClick = {
-                                    alCambiarRespuesta(indice, false)
+                                    alCambiarRespuesta(pregunta.id, false)
                                 }
                             )
                             Text(
@@ -95,7 +110,7 @@ fun EvaluacionTioTec(
                         }
                     }
 
-                    if (mostrarError && respuestas[indice] == null) {
+                    if (mostrarError && pregunta.respuesta == null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(top = 4.dp)
@@ -121,7 +136,7 @@ fun EvaluacionTioTec(
             }
         }
 
-        if (mostrarError) {
+        if (mostrarError && preguntas.isNotEmpty()) {
             Text(
                 text = "Responde todas las preguntas para continuar.",
                 color = MaterialTheme.colorScheme.error
@@ -131,6 +146,7 @@ fun EvaluacionTioTec(
 
         Button(
             onClick = alVerResultado,
+            enabled = preguntas.isNotEmpty() && !sincronizando && errorRed == null,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Ver resultado")
